@@ -1,23 +1,25 @@
 module reorder_buffer_tb();
 
 localparam DATA_WIDTH = 8;
+localparam SEND_MAX_DELAY = 5;
+localparam BACK_MAX_DELAY = 3;
 
 bit clk, rstn;
 
-// ARS - addr read slave
+// ARS - addr read slave | DONE
 logic [3:0] ars_id;
 logic ars_valid, ars_ready;
 
-// ARM - addr read master
+// ARM - addr read master | DONE
 logic [3:0] arm_id;
 logic arm_valid, arm_ready;
 
-// RS - read slave
+// RS - read slave | WIP
 logic [DATA_WIDTH-1:0] rs_data;
 logic [3:0] rs_id;
 logic rs_valid, rs_ready;
 
-// RM - read master
+// RM - read master | DONE
 logic [DATA_WIDTH-1:0] rm_data;
 logic [3:0] rm_id;
 logic rm_valid, rm_ready;
@@ -27,12 +29,15 @@ bit sending_ids;
 bit sending_back;
 
 // tasks variables
-logic [3:0] ids [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+logic [3:0] ids_send_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int i = 0;
 int gotten_ids [16] = '{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
 int j = 0;
 int k = 0;
 logic [3:0] ids_back_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+int t = 0;
+logic [3:0] ids_collected_order [16];
+logic [3:0] data_collected_order [16];
 
 reorder_buffer #(
   .DATA_WIDTH ( DATA_WIDTH )
@@ -60,6 +65,7 @@ reorder_buffer #(
 );
 
 assign arm_ready = 1;
+assign rs_ready  = 1;
 
 
 initial forever begin
@@ -68,7 +74,8 @@ initial forever begin
 end
 
 initial begin
-  ids_back_order.shuffle();
+  // repeat for different shuffling, because shuffle method can't accept random seed
+  repeat(2) ids_back_order.shuffle();
   rstn = 0;
   #15;
   rstn = 1;
@@ -80,6 +87,19 @@ initial begin
 end
 
 always_ff @( posedge clk ) begin
+  if ( rs_ready && rs_valid ) begin
+    ids_collected_order[t] = rs_id;
+    data_collected_order[t] = rs_data;
+    t = t + 1;
+  end
+  if ( t == 16 ) begin
+    $display("Gotten ids : %p", ids_collected_order);
+    $display("Gotten data: %p", data_collected_order);
+    $finish(0);
+  end
+end
+
+always_ff @( posedge clk ) begin
   if ( arm_ready && arm_valid ) begin
     gotten_ids[j] = arm_id;
     j = j + 1;
@@ -87,7 +107,7 @@ always_ff @( posedge clk ) begin
 end
 
 task send_single_id (logic [3:0] id);
-  repeat( $urandom() % 3 ) @( posedge clk );  // random delay
+  repeat( $urandom() % SEND_MAX_DELAY ) @( posedge clk );  // random delay
   ars_id = id;
   ars_valid = 'b1;
   wait( arm_valid && ars_ready );
@@ -98,7 +118,7 @@ endtask
 task automatic send_all_ids ();
   sending_ids = 1;
   repeat(16) begin  // send one id 16 times
-    send_single_id(ids[i]);
+    send_single_id(ids_send_order[i]);
     i = i + 1;
   end
   sending_ids = 0;
@@ -106,9 +126,10 @@ endtask
 
 task automatic send_all_data_back ();
   sending_back = 1;
-  repeat(2147483647) begin
+  repeat(2147483647) begin  // max int32, read as inf
+    @( negedge clk );  // not to change signal on rising edge
     if ( gotten_ids[ids_back_order[k]] != -1 ) begin  // value is collected then send
-      rm_data  = gotten_ids[ids_back_order[k]];  // data = id for testbench convenience
+      rm_data  = gotten_ids[ids_back_order[k]] + 8'h10;  // data = id+16 for testbench convenience
       rm_id    = gotten_ids[ids_back_order[k]];
       rm_valid = 1;
       wait( rm_valid && rm_ready );
@@ -120,13 +141,10 @@ task automatic send_all_data_back ();
       end
     end
     else begin
-      repeat($urandom() % 4) @( posedge clk );
+      repeat($urandom() % BACK_MAX_DELAY) @( posedge clk );
     end
   end
   sending_back = 0;
 endtask
-
-
-
 
 endmodule
