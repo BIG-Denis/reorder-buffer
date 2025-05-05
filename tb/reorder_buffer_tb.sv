@@ -6,20 +6,20 @@ localparam BACK_MAX_DELAY = 3;
 
 bit clk, rstn;
 
-// ARS - addr read slave | DONE
+// ARS - addr read slave
 logic [3:0] ars_id;
 logic ars_valid, ars_ready;
 
-// ARM - addr read master | DONE
+// ARM - addr read master
 logic [3:0] arm_id;
 logic arm_valid, arm_ready;
 
-// RS - read slave | WIP
+// RS - read slave
 logic [DATA_WIDTH-1:0] rs_data;
 logic [3:0] rs_id;
 logic rs_valid, rs_ready;
 
-// RM - read master | DONE
+// RM - read master
 logic [DATA_WIDTH-1:0] rm_data;
 logic [3:0] rm_id;
 logic rm_valid, rm_ready;
@@ -37,7 +37,7 @@ int k = 0;
 logic [3:0] ids_back_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int t = 0;
 logic [3:0] ids_collected_order [16];
-logic [3:0] data_collected_order [16];
+logic [3:0] data_collected_order [16];  // actually DATA_WIDTH or [7:0] for tb
 
 reorder_buffer #(
   .DATA_WIDTH ( DATA_WIDTH )
@@ -74,8 +74,10 @@ initial forever begin
 end
 
 initial begin
+  ids_send_order.shuffle();
+  $display("Correct order : %p", ids_send_order);
   // repeat for different shuffling, because shuffle method can't accept random seed
-  repeat(2) ids_back_order.shuffle();
+  repeat(5) ids_back_order.shuffle();
   rstn = 0;
   #15;
   rstn = 1;
@@ -93,8 +95,8 @@ always_ff @( posedge clk ) begin
     t = t + 1;
   end
   if ( t == 16 ) begin
-    $display("Gotten ids : %p", ids_collected_order);
-    $display("Gotten data: %p", data_collected_order);
+    $display("Gotten ids    : %p", ids_collected_order);
+    // $display("Gotten data: %p", data_collected_order);
     $finish(0);
   end
 end
@@ -108,9 +110,10 @@ end
 
 task send_single_id (logic [3:0] id);
   repeat( $urandom() % SEND_MAX_DELAY ) @( posedge clk );  // random delay
+  @( negedge clk );
   ars_id = id;
   ars_valid = 'b1;
-  wait( arm_valid && ars_ready );
+  wait( ars_valid && ars_ready );
   @( posedge clk );
   ars_valid = 'b0;
 endtask
