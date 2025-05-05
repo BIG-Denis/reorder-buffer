@@ -14,7 +14,7 @@ module mem_2ps #(  // memory simple dual-port
 
 localparam MEM_DEPTH = 2**ADDR_WIDTH;
 
-logic [DATA_WIDTH-1:0] mem [MEM_DEPTH-1:0];
+logic [DATA_WIDTH-1:0] mem [0:MEM_DEPTH-1];
 logic [DATA_WIDTH-1:0] output_ff;
 assign data_read_o = output_ff;
 
