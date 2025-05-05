@@ -43,16 +43,16 @@ counter cnt_w_inst (  // write addr counter
 );
 
 logic [3:0] id_mem_read_data;
-logic [3:0] id_mem_read_data_ff;
+// logic [3:0] id_mem_read_data_ff;
 
-always_ff @( posedge clk ) begin
-  if ( ~rst_n ) begin
-    id_mem_read_data_ff <= 'b0;
-  end
-  else begin
-    id_mem_read_data_ff <= id_mem_read_data;
-  end
-end
+// always_ff @( posedge clk ) begin
+//   if ( ~rst_n ) begin
+//     id_mem_read_data_ff <= 'b0;
+//   end
+//   else begin
+//     id_mem_read_data_ff <= id_mem_read_data;
+//   end
+// end
 
 mem_2ps #(  // ID MEM
   .DATA_WIDTH( 4 )
@@ -125,6 +125,6 @@ counter cnt_r_inst (  // read addr counter
 assign valid_mem_clear = rs_handshake && ( cnt_r_data == 4'hf );
 
 assign s_rdata_o = data_mem_read_data;
-assign s_rid_o   = id_mem_read_data_ff;
+assign s_rid_o   = id_mem_read_data;
 
 endmodule
