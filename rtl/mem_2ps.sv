@@ -15,8 +15,9 @@ module mem_2ps #(  // memory simple dual-port
 localparam MEM_DEPTH = 2**ADDR_WIDTH;
 
 logic [DATA_WIDTH-1:0] mem [0:MEM_DEPTH-1];
-logic [DATA_WIDTH-1:0] output_ff;
-assign data_read_o = output_ff;
+// logic [DATA_WIDTH-1:0] output_ff;
+assign data_read_o = mem[addr_read_i];
+// assign data_read_o = output_ff;
 
 always_ff @( posedge clk ) begin  // write port
   if ( write_en_i ) begin
@@ -24,8 +25,8 @@ always_ff @( posedge clk ) begin  // write port
   end
 end
 
-always_ff @( posedge clk ) begin  // read port
-  output_ff <= mem[addr_read_i];
-end
+// always_ff @( posedge clk ) begin  // read port
+//   output_ff <= mem[addr_read_i];
+// end
 
 endmodule

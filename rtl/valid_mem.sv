@@ -17,7 +17,8 @@ localparam DATA_WIDTH = 2**ADDR_WIDTH;
 logic [DATA_WIDTH-1:0] data;
 logic                  output_ff;
 
-assign read_data_o = output_ff;
+// assign read_data_o = output_ff;
+assign read_data_o = data[addr_read_i];
 
 always_ff @( posedge clk ) begin
   if ( ~rst_n ) begin
