@@ -3,10 +3,10 @@ module valid_mem #(
 ) (
   input  logic clk,
   input  logic rst_n,
-  // master side
+  // write side
   input  logic                  set_i,
   input  logic [ADDR_WIDTH-1:0] addr_write_i,
-  // slave side
+  // read side
   input  logic                  clear_i,
   input  logic [ADDR_WIDTH-1:0] addr_read_i,
   output logic                  read_data_o
@@ -17,10 +17,7 @@ localparam DATA_WIDTH = 2**ADDR_WIDTH;
 logic [DATA_WIDTH-1:0] data;
 logic                  output_ff;
 
-// assign read_data_o = output_ff;
-assign read_data_o = data[addr_read_i];
-
-always_ff @( posedge clk ) begin
+always_ff @( posedge clk ) begin  // sync write, with reset and clear
   if ( ~rst_n ) begin
     data <= 'b0;
   end
@@ -36,5 +33,7 @@ always_ff @( posedge clk ) begin
     end
   end
 end
+
+assign read_data_o = data[addr_read_i];  // async read
 
 endmodule
