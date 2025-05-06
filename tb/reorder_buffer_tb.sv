@@ -5,6 +5,7 @@ localparam SEND_MAX_DELAY = 5;
 localparam BACK_MAX_DELAY = 3;
 
 localparam RANDOM_SEED = 100;
+localparam TEST_ITERATIONS = 1000;
 
 bit clk, rstn;
 
@@ -26,21 +27,25 @@ logic [DATA_WIDTH-1:0] rm_data;
 logic [3:0] rm_id;
 logic rm_valid, rm_ready;
 
-// tasks flags
+// tasks flags, just to look at waveform
 bit sending_ids;
 bit sending_back;
 
 // tasks variables
+bit clear_gotten_ids;
+
+logic [3:0]            ids_collected_order  [16];
+logic [DATA_WIDTH-1:0] data_collected_order [16];
+
 logic [3:0] ids_send_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
-int i = 0;
+logic [3:0] ids_back_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int gotten_ids [16] = '{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+
+int i = 0;
 int j = 0;
 int k = 0;
-logic [3:0] ids_back_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int t = 0;
-logic [3:0] ids_collected_order [16];
-logic [DATA_WIDTH-1:0] data_collected_order [16];  // actually DATA_WIDTH or [7:0] for tb
-bit clear_gotten_ids;
+
 
 reorder_buffer #(
   .DATA_WIDTH ( DATA_WIDTH )
@@ -77,43 +82,32 @@ initial forever begin
 end
 
 initial begin
+  // repeating multiple times work as random seed
+  repeat(RANDOM_SEED) ids_back_order.shuffle();
   ids_send_order.shuffle();
-  // repeat for different shuffling, because shuffle method can't accept random seed
-  repeat(5) ids_back_order.shuffle();
   rstn = 0;
   #15;
   rstn = 1;
-  fork
-    send_all_ids();
-    send_all_data_back();
-  join
-  #1000;
-  ids_send_order.shuffle();
-  ids_back_order.shuffle();
-  i = 0;
-  k = 0;
-  clear_gotten_ids = 1;
-  repeat(2) @( posedge clk );
-  clear_gotten_ids = 0;
-  fork
-    send_all_ids();
-    send_all_data_back();
-  join
-  #1000;
-  ids_send_order.shuffle();
-  ids_back_order.shuffle();
-  i = 0;
-  k = 0;
-  clear_gotten_ids = 1;
-  repeat(2) @( posedge clk );
-  clear_gotten_ids = 0;
-  fork
-    send_all_ids();
-    send_all_data_back();
-  join
-  #1000;
+  // repeat processing multiple times
+  repeat(TEST_ITERATIONS) begin
+    ids_send_order.shuffle();
+    ids_back_order.shuffle();
+    i = 0;
+    k = 0;
+    clear_gotten_ids = 1;
+    repeat(2) @( posedge clk );
+    clear_gotten_ids = 0;
+    fork
+      send_all_ids();
+      send_all_data_back();
+    join
+    #1000;
+  end
+  $display("TESTS PASSED! (random seed %d, %d iterations)", RANDOM_SEED, TEST_ITERATIONS);
+  $finish(0);
 end
 
+// collecting data | read slave side
 always_ff @( posedge clk ) begin
   if ( rs_ready && rs_valid ) begin
     ids_collected_order[t] = rs_id;
@@ -123,12 +117,16 @@ always_ff @( posedge clk ) begin
   if ( t == 16 ) begin
     $display("Correct order : %p", ids_send_order);
     $display("Gotten ids    : %p", ids_collected_order);
-    $display("Gotten data   : %p", data_collected_order);
-    // $finish(0);
+    $display("Gotten data   : %p\n", data_collected_order);
+    if ( ~( ids_send_order == ids_collected_order ) ) begin
+      $display("Test failed!");
+      $stop();
+    end
     t = 0;
   end
 end
 
+// getting data to process on addr read master
 always_ff @( posedge clk ) begin
   if ( arm_ready && arm_valid ) begin
     gotten_ids[j] = arm_id;
@@ -178,7 +176,7 @@ task automatic send_all_data_back ();
       end
     end
     else begin
-      repeat($urandom() % BACK_MAX_DELAY) @( posedge clk );
+      repeat($urandom() % BACK_MAX_DELAY) @( posedge clk );  // random delay
     end
   end
   sending_back = 0;
