@@ -33,6 +33,7 @@ bit sending_back;
 
 // tasks variables
 bit clear_gotten_ids;
+bit goto_next_data;
 
 logic [3:0]            ids_collected_order  [16];
 logic [DATA_WIDTH-1:0] data_collected_order [16];
@@ -72,8 +73,30 @@ reorder_buffer #(
   .m_rready_o  ( rm_ready  )
 );
 
-assign arm_ready = 1;
-assign rs_ready  = 1;
+
+// random arm_ready change
+always_ff @( negedge clk ) begin
+  if ( ~rstn ) begin
+    arm_ready = 0;
+  end
+  else begin
+    if ( $urandom() % 10 == 0 ) begin
+      arm_ready = ~arm_ready;
+    end
+  end
+end
+
+// random rs_ready change
+always_ff @( negedge clk ) begin
+  if ( ~rstn ) begin
+    rs_ready = 0;
+  end
+  else begin
+    if ( $urandom() % 10 == 0 ) begin
+      rs_ready = ~rs_ready;
+    end
+  end
+end
 
 
 initial forever begin
@@ -101,7 +124,8 @@ initial begin
       send_all_ids();
       send_all_data_back();
     join
-    #1000;
+    wait ( goto_next_data );
+    @( posedge clk );
   end
   $display("TESTS PASSED! (random seed %d, %d iterations)", RANDOM_SEED, TEST_ITERATIONS);
   $finish(0);
@@ -118,11 +142,15 @@ always_ff @( posedge clk ) begin
     $display("Correct order : %p", ids_send_order);
     $display("Gotten ids    : %p", ids_collected_order);
     $display("Gotten data   : %p\n", data_collected_order);
-    if ( ~( ids_send_order == ids_collected_order ) ) begin
+    if ( ids_send_order != ids_collected_order ) begin
       $display("Test failed!");
       $stop();
     end
     t = 0;
+    goto_next_data = 1;
+  end
+  else begin
+    goto_next_data = 0;
   end
 end
 
@@ -145,8 +173,7 @@ task send_single_id (logic [3:0] id);
   @( negedge clk );
   ars_id = id;
   ars_valid = 'b1;
-  wait( ars_valid && ars_ready );
-  @( posedge clk );
+  @( posedge clk iff ( ars_valid && ars_ready ) );
   ars_valid = 'b0;
 endtask
 
@@ -167,8 +194,7 @@ task automatic send_all_data_back ();
       rm_data  = gotten_ids[ids_back_order[k]] + 8'd10;  // data = id+16 for testbench convenience
       rm_id    = gotten_ids[ids_back_order[k]];
       rm_valid = 1;
-      wait( rm_valid && rm_ready );
-      @( posedge clk );
+      @( posedge clk iff ( rm_valid && rm_ready ) );
       rm_valid = 0;
       k = k + 1;
       if ( k == 16 ) begin
