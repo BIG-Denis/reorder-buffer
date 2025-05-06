@@ -4,6 +4,8 @@ localparam DATA_WIDTH = 8;
 localparam SEND_MAX_DELAY = 5;
 localparam BACK_MAX_DELAY = 3;
 
+localparam RANDOM_SEED = 100;
+
 bit clk, rstn;
 
 // ARS - addr read slave
@@ -37,7 +39,8 @@ int k = 0;
 logic [3:0] ids_back_order [16] = '{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
 int t = 0;
 logic [3:0] ids_collected_order [16];
-logic [3:0] data_collected_order [16];  // actually DATA_WIDTH or [7:0] for tb
+logic [DATA_WIDTH-1:0] data_collected_order [16];  // actually DATA_WIDTH or [7:0] for tb
+bit clear_gotten_ids;
 
 reorder_buffer #(
   .DATA_WIDTH ( DATA_WIDTH )
@@ -75,12 +78,35 @@ end
 
 initial begin
   ids_send_order.shuffle();
-  $display("Correct order : %p", ids_send_order);
   // repeat for different shuffling, because shuffle method can't accept random seed
   repeat(5) ids_back_order.shuffle();
   rstn = 0;
   #15;
   rstn = 1;
+  fork
+    send_all_ids();
+    send_all_data_back();
+  join
+  #1000;
+  ids_send_order.shuffle();
+  ids_back_order.shuffle();
+  i = 0;
+  k = 0;
+  clear_gotten_ids = 1;
+  repeat(2) @( posedge clk );
+  clear_gotten_ids = 0;
+  fork
+    send_all_ids();
+    send_all_data_back();
+  join
+  #1000;
+  ids_send_order.shuffle();
+  ids_back_order.shuffle();
+  i = 0;
+  k = 0;
+  clear_gotten_ids = 1;
+  repeat(2) @( posedge clk );
+  clear_gotten_ids = 0;
   fork
     send_all_ids();
     send_all_data_back();
@@ -95,9 +121,11 @@ always_ff @( posedge clk ) begin
     t = t + 1;
   end
   if ( t == 16 ) begin
+    $display("Correct order : %p", ids_send_order);
     $display("Gotten ids    : %p", ids_collected_order);
-    // $display("Gotten data: %p", data_collected_order);
-    $finish(0);
+    $display("Gotten data   : %p", data_collected_order);
+    // $finish(0);
+    t = 0;
   end
 end
 
@@ -105,6 +133,12 @@ always_ff @( posedge clk ) begin
   if ( arm_ready && arm_valid ) begin
     gotten_ids[j] = arm_id;
     j = j + 1;
+  end
+  if ( clear_gotten_ids ) begin
+    gotten_ids = '{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+  end
+  if ( j >= 16 ) begin
+    j = 0;
   end
 end
 
@@ -132,7 +166,7 @@ task automatic send_all_data_back ();
   repeat(2147483647) begin  // max int32, read as inf
     @( negedge clk );  // not to change signal on rising edge
     if ( gotten_ids[ids_back_order[k]] != -1 ) begin  // value is collected then send
-      rm_data  = gotten_ids[ids_back_order[k]] + 8'h10;  // data = id+16 for testbench convenience
+      rm_data  = gotten_ids[ids_back_order[k]] + 8'd10;  // data = id+16 for testbench convenience
       rm_id    = gotten_ids[ids_back_order[k]];
       rm_valid = 1;
       wait( rm_valid && rm_ready );
