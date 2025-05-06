@@ -43,6 +43,7 @@ counter cnt_w_inst (  // write addr counter
 );
 
 logic [3:0] id_mem_read_data;
+logic       id_mem_valid;
 // logic [3:0] id_mem_read_data_ff;
 
 // always_ff @( posedge clk ) begin
@@ -65,6 +66,18 @@ mem_2ps #(  // ID MEM
   // read port
   .addr_read_i  ( cnt_r_data ),
   .data_read_o  ( id_mem_read_data )
+);
+
+valid_mem valid_mem_id_inst (
+  .clk          ( clk ),
+  .rst_n        ( rst_n ),
+  // write side (slave)
+  .set_i        ( ar_handshake ),
+  .addr_write_i ( s_arid_i     ),
+  // read side (master)
+  .clear_i      ( valid_mem_clear ),
+  .addr_read_i  ( cnt_r_data      ),
+  .read_data_o  ( id_mem_valid    )
 );
 
 
@@ -93,7 +106,7 @@ mem_2ps #(  // DATA MEM
 logic valid_mem_clear;
 logic valid_mem_read_data;
 
-valid_mem valid_mem_inst (
+valid_mem valid_mem_data_inst (
   .clk          ( clk ),
   .rst_n        ( rst_n ),
   // master side
@@ -108,7 +121,7 @@ valid_mem valid_mem_inst (
 
 // DATA MEM & VALID MEM slave-side connection
 
-assign s_rvalid_o = valid_mem_read_data;
+assign s_rvalid_o = valid_mem_read_data && id_mem_valid;
 
 logic rs_handshake;
 assign rs_handshake = s_rready_i && s_rvalid_o;
